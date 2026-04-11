@@ -2,7 +2,7 @@
 
 ## Build
 
-- Always run `npm run format && npm run lint:fix && npm run build` after making changes to verify the project compiles successfully.
+- Always run `npm run format && npm run lint && npm run build` after making changes to verify the project compiles successfully.
 
 ## playwright-cli
 

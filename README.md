@@ -12,6 +12,10 @@ Run Claude Code directly from Slack. Porygon-Z connects your Slack workspace to 
 SLACK_APP_TOKEN=xapp-... SLACK_BOT_TOKEN=xoxb-... npx @irvingdinh/porygon-z@latest
 ```
 
+## Deployment Guides
+
+- [Install on Ubuntu (systemd)](docs/install-ubuntu/install-ubuntu.md) — run as a persistent service that starts on boot
+
 ## Prerequisites
 
 - **Node.js** >= 20
