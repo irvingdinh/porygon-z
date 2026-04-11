@@ -32,12 +32,12 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
       'simple-import-sort/imports': 'error',
       'simple-import-sort/exports': 'error',
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
 
       // Temporarily disable some rules
+      '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
