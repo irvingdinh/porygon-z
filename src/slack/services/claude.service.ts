@@ -3,6 +3,8 @@ import { createInterface } from 'node:readline';
 
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 
+import type { EffortLevel, PermissionMode } from './workspace.service';
+
 // --- Stream event types ---
 
 export interface ThinkingBlock {
@@ -60,26 +62,31 @@ export class ClaudeService implements OnApplicationShutdown {
     prompt: string;
     cwd: string;
     resumeSessionId?: string;
+    model?: string;
+    effort?: EffortLevel;
+    permissionMode?: PermissionMode;
   }): AsyncGenerator<StreamEvent> {
+    const model = options.model ?? 'opus[1m]';
+    const effort = options.effort ?? 'max';
+    const permissionMode = options.permissionMode ?? 'bypassPermissions';
+
     this.logger.log(
-      `Spawning process, cwd: ${options.cwd}, prompt length: ${options.prompt.length}, resume: ${options.resumeSessionId ?? 'none'}`,
+      `Spawning process, cwd: ${options.cwd}, prompt length: ${options.prompt.length}, resume: ${options.resumeSessionId ?? 'none'}, model: ${model}, effort: ${effort}, permission: ${permissionMode}`,
     );
 
     const args: string[] = [];
     if (options.resumeSessionId) {
       args.push('--resume', options.resumeSessionId);
     }
-    args.push(
-      '--print',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--dangerously-skip-permissions',
-      '--model',
-      'opus[1m]',
-      '--effort',
-      'max',
-    );
+    args.push('--print', '--output-format', 'stream-json', '--verbose');
+
+    if (permissionMode === 'bypassPermissions') {
+      args.push('--dangerously-skip-permissions');
+    } else {
+      args.push('--permission-mode', permissionMode);
+    }
+
+    args.push('--model', model, '--effort', effort);
 
     const proc = spawn('claude', args, {
       cwd: options.cwd,

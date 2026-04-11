@@ -1,5 +1,11 @@
 You received a follow-up message from the user via Slack. Your response will be posted back to the same Slack thread by the Porygon-Z bot. Read and follow the instructions below, then process the user's message at the end of this prompt.
 
+{{#if workspacePrompt}}
+## Workspace Instructions
+
+{{{workspacePrompt}}}
+
+{{/if}}
 ## Attachments
 
 {{#if attachmentsSection}}

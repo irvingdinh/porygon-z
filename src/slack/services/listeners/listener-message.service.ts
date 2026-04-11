@@ -11,7 +11,7 @@ import type { ContentBlock } from '../claude.service';
 import { ClaudeService } from '../claude.service';
 import { ClaudeFormatterService } from '../claude-formatter.service';
 import { ThreadService } from '../thread.service';
-import { WorkspaceService } from '../workspace.service';
+import { type WorkspaceConfig, WorkspaceService } from '../workspace.service';
 import { SlackListener } from './registry.service';
 
 // Per-thread serialisation lock — no timeout by design (some Claude runs take hours).
@@ -151,6 +151,7 @@ export class ListenerMessageService implements SlackListener<'message'> {
         parentTs,
         channelId,
         client,
+        workspaceConfig,
       );
 
       // Retry with fresh session if resume failed
@@ -175,6 +176,7 @@ export class ListenerMessageService implements SlackListener<'message'> {
           parentTs,
           channelId,
           client,
+          workspaceConfig,
         );
       }
 
@@ -238,6 +240,7 @@ export class ListenerMessageService implements SlackListener<'message'> {
     threadTs: string,
     channelId: string,
     client: WebClient,
+    workspaceConfig: WorkspaceConfig | null,
   ): Promise<{
     blocks: ContentBlock[];
     finalResult: string;
@@ -255,6 +258,9 @@ export class ListenerMessageService implements SlackListener<'message'> {
         prompt,
         cwd,
         resumeSessionId,
+        model: workspaceConfig?.model,
+        effort: workspaceConfig?.effort,
+        permissionMode: workspaceConfig?.permissionMode,
       })) {
         if (
           event.type === 'system' &&

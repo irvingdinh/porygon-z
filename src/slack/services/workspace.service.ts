@@ -7,9 +7,15 @@ import { ConfigService } from '@nestjs/config';
 
 import { AppConfig } from '../../core/config/config';
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export type PermissionMode = 'auto' | 'plan' | 'bypassPermissions';
+
 export interface WorkspaceConfig {
   cwd: string;
   systemPrompt?: string;
+  model?: string;
+  effort?: EffortLevel;
+  permissionMode?: PermissionMode;
 }
 
 @Injectable()
