@@ -1,0 +1,8 @@
+{{#if empty}}
+:file_folder: No active sessions found.
+{{else}}
+:file_folder: *{{count}} session(s):*
+{{#each sessions}}
+> `{{this.threadTs}}` — Session: `{{#if this.sessionId}}{{this.sessionId}}{{else}}(pending){{/if}}` — Created: {{this.createdAt}}
+{{/each}}
+{{/if}}

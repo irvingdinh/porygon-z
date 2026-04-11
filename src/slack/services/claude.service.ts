@@ -46,13 +46,23 @@ export interface StreamEvent {
   result?: string;
 }
 
+// --- Process tracking ---
+
+export interface ProcessInfo {
+  process: ChildProcess;
+  channelId: string;
+  userId: string;
+  threadTs: string;
+  startedAt: Date;
+}
+
 // --- Service ---
 
 @Injectable()
 export class ClaudeService implements OnApplicationShutdown {
   private readonly logger = new Logger(ClaudeService.name);
 
-  private readonly processes = new Set<ChildProcess>();
+  private readonly processes = new Map<number, ProcessInfo>();
 
   onApplicationShutdown() {
     this.killAll();
@@ -65,6 +75,11 @@ export class ClaudeService implements OnApplicationShutdown {
     model?: string;
     effort?: EffortLevel;
     permissionMode?: PermissionMode;
+    context?: {
+      channelId: string;
+      userId: string;
+      threadTs: string;
+    };
   }): AsyncGenerator<StreamEvent> {
     const model = options.model ?? 'opus[1m]';
     const effort = options.effort ?? 'max';
@@ -94,11 +109,17 @@ export class ClaudeService implements OnApplicationShutdown {
     });
 
     this.logger.log(`Process started, pid: ${proc.pid}`);
-    this.processes.add(proc);
+    this.processes.set(proc.pid!, {
+      process: proc,
+      channelId: options.context?.channelId ?? '',
+      userId: options.context?.userId ?? '',
+      threadTs: options.context?.threadTs ?? '',
+      startedAt: new Date(),
+    });
 
     proc.on('exit', (code) => {
       this.logger.log(`Process ${proc.pid} exited with code: ${code}`);
-      this.processes.delete(proc);
+      this.processes.delete(proc.pid!);
     });
 
     // Drain stderr in background
@@ -141,18 +162,42 @@ export class ClaudeService implements OnApplicationShutdown {
           proc.on('exit', () => resolve());
         }
       });
-      this.processes.delete(proc);
+      this.processes.delete(proc.pid!);
     }
   }
 
   killAll(): number {
     const count = this.processes.size;
 
-    for (const proc of this.processes) {
-      proc.kill('SIGKILL');
+    for (const info of this.processes.values()) {
+      info.process.kill('SIGKILL');
     }
     this.processes.clear();
 
+    return count;
+  }
+
+  killByChannel(channelId: string): number {
+    let count = 0;
+    for (const [pid, info] of this.processes) {
+      if (info.channelId === channelId) {
+        info.process.kill('SIGKILL');
+        this.processes.delete(pid);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  killByUser(userId: string): number {
+    let count = 0;
+    for (const [pid, info] of this.processes) {
+      if (info.userId === userId) {
+        info.process.kill('SIGKILL');
+        this.processes.delete(pid);
+        count++;
+      }
+    }
     return count;
   }
 }

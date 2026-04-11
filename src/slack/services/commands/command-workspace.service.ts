@@ -11,6 +11,7 @@ import type {
 
 import { TemplateService } from '../../../core/services/template.service';
 import {
+  type ChannelResponseMode,
   type EffortLevel,
   type PermissionMode,
   WorkspaceService,
@@ -46,6 +47,8 @@ export class CommandWorkspaceService implements SlackCommand {
     const currentModel = config?.model ?? 'opus[1m]';
     const currentEffort = config?.effort ?? 'max';
     const currentPermissionMode = config?.permissionMode ?? 'bypassPermissions';
+    const currentChannelResponseMode =
+      config?.channelResponseMode ?? 'mention-only';
 
     await client.views.open({
       trigger_id: command.trigger_id,
@@ -167,6 +170,45 @@ export class CommandWorkspaceService implements SlackCommand {
           },
           {
             type: 'input',
+            block_id: 'channel_response_block',
+            label: {
+              type: 'plain_text',
+              text: 'Channel Response Mode',
+            },
+            element: {
+              type: 'static_select',
+              action_id: 'channel_response_input',
+              initial_option: {
+                text: {
+                  type: 'plain_text',
+                  text: this.channelResponseLabel(currentChannelResponseMode),
+                },
+                value: currentChannelResponseMode,
+              },
+              options: [
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'Mentions Only',
+                  },
+                  value: 'mention-only',
+                },
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'All Messages',
+                  },
+                  value: 'all-messages',
+                },
+              ],
+            },
+            hint: {
+              type: 'plain_text',
+              text: 'In channels: respond to @mentions only, or all messages',
+            },
+          },
+          {
+            type: 'input',
             block_id: 'system_prompt_block',
             optional: true,
             label: {
@@ -207,6 +249,9 @@ export class CommandWorkspaceService implements SlackCommand {
     const permissionMode =
       (values.permission_block.permission_input.selected_option
         ?.value as PermissionMode) ?? 'bypassPermissions';
+    const channelResponseMode =
+      (values.channel_response_block.channel_response_input.selected_option
+        ?.value as ChannelResponseMode) ?? 'mention-only';
     const systemPrompt =
       values.system_prompt_block.system_prompt_input.value?.trim() ?? '';
 
@@ -259,11 +304,12 @@ export class CommandWorkspaceService implements SlackCommand {
       model,
       effort,
       permissionMode,
+      channelResponseMode,
       systemPrompt,
     });
 
     this.logger.log(
-      `Workspace config updated for channel ${channelId}: cwd=${cwd}, model=${model}, effort=${effort}, permissionMode=${permissionMode}`,
+      `Workspace config updated for channel ${channelId}: cwd=${cwd}, model=${model}, effort=${effort}, permissionMode=${permissionMode}, channelResponseMode=${channelResponseMode}`,
     );
 
     // Post confirmation message
@@ -276,6 +322,7 @@ export class CommandWorkspaceService implements SlackCommand {
       model,
       effort,
       permissionLabel: this.permissionLabel(permissionMode),
+      channelResponseLabel: this.channelResponseLabel(channelResponseMode),
       hasSystemPrompt: systemPrompt.length > 0,
     });
 
@@ -293,6 +340,15 @@ export class CommandWorkspaceService implements SlackCommand {
         return 'Auto';
       case 'plan':
         return 'Plan (read-only)';
+    }
+  }
+
+  private channelResponseLabel(mode: ChannelResponseMode): string {
+    switch (mode) {
+      case 'mention-only':
+        return 'Mentions Only';
+      case 'all-messages':
+        return 'All Messages';
     }
   }
 }

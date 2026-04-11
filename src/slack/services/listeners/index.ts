@@ -1,7 +1,8 @@
+import { ListenerMentionService } from './listener-mention.service';
 import { ListenerMessageService } from './listener-message.service';
 import { RegistryService, SLACK_LISTENER } from './registry.service';
 
-const listenerClasses = [ListenerMessageService];
+const listenerClasses = [ListenerMessageService, ListenerMentionService];
 
 export const listenerServices = [
   RegistryService,

@@ -9,6 +9,7 @@ import { AppConfig } from '../../core/config/config';
 
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 export type PermissionMode = 'auto' | 'plan' | 'bypassPermissions';
+export type ChannelResponseMode = 'mention-only' | 'all-messages';
 
 export interface WorkspaceConfig {
   cwd: string;
@@ -16,6 +17,7 @@ export interface WorkspaceConfig {
   model?: string;
   effort?: EffortLevel;
   permissionMode?: PermissionMode;
+  channelResponseMode?: ChannelResponseMode;
 }
 
 @Injectable()

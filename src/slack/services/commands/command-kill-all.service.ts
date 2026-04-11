@@ -9,24 +9,20 @@ import { ClaudeService } from '../claude.service';
 import { SlackCommand } from './registry.service';
 
 @Injectable()
-export class CommandKillService implements SlackCommand {
-  private readonly logger = new Logger(CommandKillService.name);
+export class CommandKillAllService implements SlackCommand {
+  private readonly logger = new Logger(CommandKillAllService.name);
 
-  readonly command = '/kill';
+  readonly command = '/kill-all';
 
   constructor(
     private readonly claude: ClaudeService,
     private readonly template: TemplateService,
   ) {}
 
-  async handle({
-    ack,
-    command,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    const channelId = command.channel_id;
-    const count = this.claude.killByChannel(channelId);
+  async handle({ ack }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+    const count = this.claude.killAll();
     await ack(
-      this.template.render('slack.commands.command-kill-ok', {
+      this.template.render('slack.commands.command-kill-all-ok', {
         count,
         plural: count !== 1,
       }),
