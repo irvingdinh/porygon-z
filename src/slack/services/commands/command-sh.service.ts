@@ -4,6 +4,7 @@ import type {
   SlackCommandMiddlewareArgs,
 } from '@slack/bolt';
 
+import { TemplateService } from '../../../core/services/template.service';
 import { SlackCommand } from './registry.service';
 
 @Injectable()
@@ -12,6 +13,8 @@ export class CommandShService implements SlackCommand {
 
   readonly command = '/sh';
 
+  constructor(private readonly template: TemplateService) {}
+
   async handle({
     ack,
     command,
@@ -19,7 +22,7 @@ export class CommandShService implements SlackCommand {
     const rawCommand = command.text.trim();
 
     if (!rawCommand) {
-      await ack(':x: Usage: `/sh <command>` — e.g. `/sh make restart`');
+      await ack(this.template.render('slack.commands.command-sh-error-usage'));
       return;
     }
 

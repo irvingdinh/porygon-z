@@ -4,6 +4,8 @@ import type {
   SlackCommandMiddlewareArgs,
 } from '@slack/bolt';
 
+import { TemplateService } from '../../../core/services/template.service';
+import { ClaudeService } from '../claude.service';
 import { SlackCommand } from './registry.service';
 
 @Injectable()
@@ -12,8 +14,18 @@ export class CommandKillService implements SlackCommand {
 
   readonly command = '/kill';
 
+  constructor(
+    private readonly claude: ClaudeService,
+    private readonly template: TemplateService,
+  ) {}
+
   async handle({ ack }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    this.logger.warn('/kill is not yet implemented.');
-    await ack(':skull_and_crossbones: /kill is not yet implemented.');
+    const count = this.claude.killAll();
+    await ack(
+      this.template.render('slack.commands.command-kill-ok', {
+        count,
+        plural: count !== 1,
+      }),
+    );
   }
 }
