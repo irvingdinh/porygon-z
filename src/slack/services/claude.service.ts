@@ -122,7 +122,6 @@ export class ClaudeService implements OnApplicationShutdown {
       for await (const line of rl) {
         if (line.trim() === '') continue;
         try {
-          console.log(line);
           const event = JSON.parse(line) as StreamEvent;
           this.logger.debug(
             `[stdout:${proc.pid}] type=${event.type} subtype=${event.subtype ?? '-'}`,

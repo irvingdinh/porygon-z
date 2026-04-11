@@ -1,98 +1,162 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Porygon-Z
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![npm version](https://img.shields.io/npm/v/@irvingdinh/porygon-z.svg)](https://www.npmjs.com/package/@irvingdinh/porygon-z)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/@irvingdinh/porygon-z.svg)](https://nodejs.org)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Run Claude Code directly from Slack. Porygon-Z connects your Slack workspace to Claude's coding capabilities — ask questions, execute tasks, and manage files without leaving your chat.
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Quick Start
 
 ```bash
-$ npm install
+SLACK_APP_TOKEN=xapp-... SLACK_BOT_TOKEN=xoxb-... npx @irvingdinh/porygon-z@latest
 ```
 
-## Compile and run the project
+## Prerequisites
+
+- **Node.js** >= 20
+- **Claude CLI** — installed, configured, and authenticated ([installation guide](https://docs.anthropic.com/en/docs/claude-code/getting-started))
+- **Slack App** — with Socket Mode enabled and the required scopes (see [Appendix: Slack App Setup](#appendix-slack-app-setup))
+
+## Configuration
+
+Porygon-Z is configured through environment variables:
+
+| Variable | Required | Description |
+|---|---|---|
+| `SLACK_APP_TOKEN` | Yes | Slack app-level token (`xapp-...`) for Socket Mode |
+| `SLACK_BOT_TOKEN` | Yes | Slack bot token (`xoxb-...`) for API calls |
+| `DATA_DIR` | No | Data directory (defaults to `~/.porygon-z`) |
+
+You can set these inline, export them, or use a `.env` file in your working directory.
+
+## Usage
+
+Once running, send a direct message to the Porygon-Z bot in Slack. It will spawn a Claude Code session to handle your request and stream the response back to your thread.
+
+### Slash Commands
+
+| Command | Description |
+|---|---|
+| `/workspace` | Configure the workspace for the current channel — set working directory, Claude model, effort level, and permission mode |
+| `/cd <path>` | Change the working directory for the current channel |
+| `/ll` | List files in the current working directory |
+| `/kill` | Kill all running Claude processes |
+
+### Features
+
+- **Streaming responses** — see Claude's thinking and tool usage in real-time
+- **Session persistence** — continue conversations across messages in the same thread
+- **File handling** — attach files to your message; generated files are uploaded back
+- **Per-channel workspaces** — configure different working directories, models, and settings per channel
+- **Thread serialization** — requests within a thread are processed one at a time to prevent conflicts
+
+### Workspace Configuration
+
+Use the `/workspace` command to configure per-channel settings:
+
+- **Working directory** — where Claude executes commands
+- **Model** — Claude model to use (e.g., `sonnet`, `opus`)
+- **Effort level** — Claude's effort level (`low`, `medium`, `high`, `max`)
+- **Permission mode** — controls Claude's autonomy (`plan`, `auto`, `bypassPermissions`)
+
+## Development
 
 ```bash
-# development
-$ npm run start
+# Install dependencies
+npm install
 
-# watch mode
-$ npm run start:dev
+# Run in watch mode
+npm run start:dev
 
-# production mode
-$ npm run start:prod
+# Build
+npm run build
+
+# Lint
+npm run lint
 ```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+[MIT](LICENSE)
+
+---
+
+## Appendix: Slack App Setup
+
+Follow these steps to create and configure a Slack app for Porygon-Z.
+
+### 1. Create a New Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**
+2. Choose **From scratch**
+3. Enter an app name (e.g., "Porygon-Z") and select your workspace
+4. Click **Create App**
+
+### 2. Enable Socket Mode
+
+1. In the left sidebar, go to **Socket Mode**
+2. Toggle **Enable Socket Mode** on
+3. When prompted, create an app-level token with the `connections:write` scope
+4. Name it (e.g., "socket-token") and click **Generate**
+5. Copy the token (`xapp-...`) — this is your `SLACK_APP_TOKEN`
+
+### 3. Configure Bot Token Scopes
+
+1. Go to **OAuth & Permissions** in the left sidebar
+2. Under **Scopes > Bot Token Scopes**, add the following:
+
+| Scope | Purpose |
+|---|---|
+| `chat:write` | Send messages |
+| `chat:write.customize` | Send messages with custom username/avatar |
+| `files:read` | Download user-attached files |
+| `files:write` | Upload generated files |
+| `reactions:write` | Add status emoji reactions |
+| `app_mentions:read` | Detect @mentions |
+| `channels:read` | Access channel info |
+| `channels:history` | Read channel messages |
+| `groups:read` | Access private channel info |
+| `groups:history` | Read private channel messages |
+| `im:read` | Access DM info |
+| `im:history` | Read DM messages |
+| `mpim:history` | Read group DM messages |
+| `users:read` | Access user info |
+
+3. Click **Install to Workspace** (or **Reinstall** if already installed)
+4. Copy the **Bot User OAuth Token** (`xoxb-...`) — this is your `SLACK_BOT_TOKEN`
+
+### 4. Subscribe to Bot Events
+
+1. Go to **Event Subscriptions** in the left sidebar
+2. Toggle **Enable Events** on
+3. Under **Subscribe to bot events**, add:
+   - `message.im` — listens for direct messages to the bot
+
+### 5. Register Slash Commands
+
+1. Go to **Slash Commands** in the left sidebar
+2. Create the following commands:
+
+| Command | Short Description |
+|---|---|
+| `/workspace` | Configure workspace settings |
+| `/cd` | Change working directory |
+| `/ll` | List files |
+| `/kill` | Kill running processes |
+
+For each command, set the **Request URL** to any placeholder (Socket Mode does not use it).
+
+### 6. Configure App Home
+
+1. Go to **App Home** in the left sidebar
+2. Under **Show Tabs**, enable **Messages Tab**
+3. Check **Allow users to send Slash commands and messages from the messages tab**
+
+### 7. Start Porygon-Z
+
+```bash
+SLACK_APP_TOKEN=xapp-... SLACK_BOT_TOKEN=xoxb-... npx @irvingdinh/porygon-z@latest
+```
+
+Send a direct message to your bot in Slack — you should see it respond with Claude's output.
