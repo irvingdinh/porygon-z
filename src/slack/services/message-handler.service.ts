@@ -153,29 +153,37 @@ export class MessageHandlerService {
         );
       }
 
-      // --- Final message (separate from progress) ---
+      // --- Final message ---
       const finalText =
         this.formatter.formatFinal(result.finalResult) ||
         this.formatter.formatStreaming(result.blocks);
 
-      await client.chat.postMessage({
-        channel: channelId,
-        thread_ts: parentTs,
-        text: finalText || 'No response generated.',
-      });
-
-      // --- Update progress message to "completed" ---
       const progressTs = this.streamingUpdate.getProgressMessageTs(parentTs);
+
       if (progressTs) {
+        // Update the existing progress message with the final result
         try {
           await client.chat.update({
             channel: channelId,
             ts: progressTs,
-            text: ':white_check_mark: _Processing complete._',
+            text: finalText || 'No response generated.',
           });
         } catch {
-          // non-critical
+          // Fallback: post as new message if update fails
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: parentTs,
+            text: finalText || 'No response generated.',
+          });
         }
+        this.streamingUpdate.clearProgressMessageTs(parentTs);
+      } else {
+        // No progress message was created — post the final result directly
+        await client.chat.postMessage({
+          channel: channelId,
+          thread_ts: parentTs,
+          text: finalText || 'No response generated.',
+        });
       }
 
       // --- Upload outbound files ---
@@ -285,7 +293,8 @@ export class MessageHandlerService {
     }
 
     // Emit end — StreamingUpdateService flushes final state and cleans up
-    this.eventEmitter.emit('claude.stream.end', { parentTs });
+    // Must use emitAsync to wait for handleEnd to complete (which saves progressMessageTs)
+    await this.eventEmitter.emitAsync('claude.stream.end', { parentTs });
 
     if (resumeSessionId && !sessionId) {
       failed = true;

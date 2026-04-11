@@ -7,7 +7,8 @@
 ## playwright-cli
 
 - Always use --headed
-- Always use ./playwright-cli/profile to persist the profile.
+- Always use ./.playwright-cli/profile to persist the profile.
+- Always put assets (snapshot, screenshot, etc.) into gitignored ./.playwright-cli to not pollute the repository.
 
 ## Manual Testing
 

@@ -25,6 +25,7 @@ interface ThreadStreamState {
 export class StreamingUpdateService implements OnApplicationShutdown {
   private readonly logger = new Logger(StreamingUpdateService.name);
   private readonly streams = new Map<string, ThreadStreamState>();
+  private readonly completedProgressTs = new Map<string, string>();
 
   constructor(private readonly formatter: ClaudeFormatterService) {}
 
@@ -67,6 +68,9 @@ export class StreamingUpdateService implements OnApplicationShutdown {
     if (!state) return;
     state.finalized = true;
     await this.flushOne(state);
+    if (state.progressMessageTs) {
+      this.completedProgressTs.set(payload.parentTs, state.progressMessageTs);
+    }
     this.streams.delete(payload.parentTs);
   }
 
@@ -84,7 +88,15 @@ export class StreamingUpdateService implements OnApplicationShutdown {
   // --- Public ---
 
   getProgressMessageTs(parentTs: string): string | null {
-    return this.streams.get(parentTs)?.progressMessageTs ?? null;
+    return (
+      this.streams.get(parentTs)?.progressMessageTs ??
+      this.completedProgressTs.get(parentTs) ??
+      null
+    );
+  }
+
+  clearProgressMessageTs(parentTs: string) {
+    this.completedProgressTs.delete(parentTs);
   }
 
   // --- Lifecycle ---
