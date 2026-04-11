@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 import { Injectable, Logger } from '@nestjs/common';
 import type {
@@ -38,17 +39,7 @@ export class CommandCdService implements SlackCommand {
       return;
     }
 
-    let resolved: string;
-    try {
-      resolved = this.workspace.resolveRelativePath(currentDir, target);
-    } catch {
-      await ack(
-        this.template.render('slack.commands.command-cd-error-escape', {
-          target,
-        }),
-      );
-      return;
-    }
+    const resolved = path.resolve(currentDir, target);
 
     if (!fs.existsSync(resolved)) {
       await ack(

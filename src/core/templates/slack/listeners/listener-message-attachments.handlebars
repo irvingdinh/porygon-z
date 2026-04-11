@@ -1,0 +1,13 @@
+{{#if attachments.length}}
+The user attached {{attachments.length}} file(s) with this message:
+{{#each attachments}}
+{{#if this.renamed}}
+  - {{this.path}} (original filename: "{{this.originalName}}", renamed to avoid collision)
+{{else}}
+  - {{this.path}}
+{{/if}}
+{{/each}}
+
+{{/if}}
+All attachments from this conversation thread are available in: {{attachmentsDirPath}}
+Read files from there as needed when the user's request references them.

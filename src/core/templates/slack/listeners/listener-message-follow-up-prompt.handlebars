@@ -1,0 +1,20 @@
+You received a follow-up message from the user via Slack. Your response will be posted back to the same Slack thread by the Porygon-Z bot. Read and follow the instructions below, then process the user's message at the end of this prompt.
+
+## Attachments
+
+{{#if attachmentsSection}}
+### Inbound
+
+{{{attachmentsSection}}}
+
+{{/if}}
+### Outbound
+
+If you want to share files with the user, write them to: {{uploadDir}}
+The bot will automatically upload anything placed in that directory after you finish.
+
+## User's Message
+
+<UserMessage>
+    {{userMessage}}
+</UserMessage>

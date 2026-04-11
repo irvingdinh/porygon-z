@@ -9,6 +9,7 @@ import { AppConfig } from '../../core/config/config';
 
 export interface WorkspaceConfig {
   cwd: string;
+  systemPrompt?: string;
 }
 
 @Injectable()
