@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Interval } from '@nestjs/schedule';
 import type { WebClient } from '@slack/web-api';
 
-import type { ContentBlock } from './claude.service';
+import type { ThinkingBlock, ToolUseBlock } from './claude.service';
 import { ClaudeFormatterService } from './claude-formatter.service';
 
 // --- Internal state ---
@@ -12,10 +12,8 @@ interface ThreadStreamState {
   channelId: string;
   parentTs: string;
   client: WebClient;
-  progressMessageTs: string | null;
-  blocks: ContentBlock[];
-  activeToolName: string | undefined;
-  dirty: boolean;
+  liveMessageTs: string;
+  currentToolBlock: ToolUseBlock | null;
   finalized: boolean;
 }
 
@@ -25,7 +23,6 @@ interface ThreadStreamState {
 export class StreamingUpdateService implements OnApplicationShutdown {
   private readonly logger = new Logger(StreamingUpdateService.name);
   private readonly streams = new Map<string, ThreadStreamState>();
-  private readonly completedProgressTs = new Map<string, string>();
 
   constructor(private readonly formatter: ClaudeFormatterService) {}
 
@@ -36,41 +33,51 @@ export class StreamingUpdateService implements OnApplicationShutdown {
     parentTs: string;
     channelId: string;
     client: WebClient;
+    liveMessageTs: string;
   }) {
     this.streams.set(payload.parentTs, {
       channelId: payload.channelId,
       parentTs: payload.parentTs,
       client: payload.client,
-      progressMessageTs: null,
-      blocks: [],
-      activeToolName: undefined,
-      dirty: false,
+      liveMessageTs: payload.liveMessageTs,
+      currentToolBlock: null,
       finalized: false,
     });
   }
 
-  @OnEvent('claude.stream.blocks')
-  handleBlocks(payload: {
-    parentTs: string;
-    blocks: ContentBlock[];
-    activeToolName?: string;
-  }) {
+  @OnEvent('claude.stream.thinking')
+  handleThinking(payload: { parentTs: string; block: ThinkingBlock }) {
     const state = this.streams.get(payload.parentTs);
     if (!state) return;
-    state.blocks = payload.blocks;
-    state.activeToolName = payload.activeToolName;
-    state.dirty = true;
+
+    const text = this.formatter.formatThinkingMessage(payload.block);
+
+    state.client.chat
+      .postMessage({
+        channel: state.channelId,
+        thread_ts: state.parentTs,
+        text,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Failed to post thinking message for ${payload.parentTs}`,
+          err,
+        );
+      });
+  }
+
+  @OnEvent('claude.stream.tool')
+  handleTool(payload: { parentTs: string; block: ToolUseBlock | null }) {
+    const state = this.streams.get(payload.parentTs);
+    if (!state) return;
+    state.currentToolBlock = payload.block;
   }
 
   @OnEvent('claude.stream.end')
-  async handleEnd(payload: { parentTs: string }) {
+  handleEnd(payload: { parentTs: string }) {
     const state = this.streams.get(payload.parentTs);
     if (!state) return;
     state.finalized = true;
-    await this.flushOne(state);
-    if (state.progressMessageTs) {
-      this.completedProgressTs.set(payload.parentTs, state.progressMessageTs);
-    }
     this.streams.delete(payload.parentTs);
   }
 
@@ -79,64 +86,42 @@ export class StreamingUpdateService implements OnApplicationShutdown {
   @Interval(2000)
   async flushAll() {
     for (const state of this.streams.values()) {
-      if (state.dirty && !state.finalized) {
-        await this.flushOne(state);
-      }
+      if (state.finalized) continue;
+      await this.flushOne(state);
     }
   }
 
   // --- Public ---
 
-  getProgressMessageTs(parentTs: string): string | null {
-    return (
-      this.streams.get(parentTs)?.progressMessageTs ??
-      this.completedProgressTs.get(parentTs) ??
-      null
-    );
-  }
-
-  clearProgressMessageTs(parentTs: string) {
-    this.completedProgressTs.delete(parentTs);
+  getLiveMessageTs(parentTs: string): string | null {
+    return this.streams.get(parentTs)?.liveMessageTs ?? null;
   }
 
   // --- Lifecycle ---
 
-  async onApplicationShutdown() {
-    for (const state of this.streams.values()) {
-      await this.flushOne(state);
-    }
+  onApplicationShutdown() {
     this.streams.clear();
   }
 
   // --- Internal ---
 
   private async flushOne(state: ThreadStreamState) {
-    if (!state.dirty && state.progressMessageTs) return;
-
-    const text = this.formatter.formatStreaming(
-      state.blocks,
-      state.activeToolName,
-    );
-    if (!text) return;
+    const now = new Date();
+    const text = state.currentToolBlock
+      ? this.formatter.formatLiveToolCall(state.currentToolBlock, now)
+      : this.formatter.formatLiveIdle(now);
 
     try {
-      if (!state.progressMessageTs) {
-        const result = await state.client.chat.postMessage({
-          channel: state.channelId,
-          thread_ts: state.parentTs,
-          text,
-        });
-        state.progressMessageTs = result.ts ?? null;
-      } else {
-        await state.client.chat.update({
-          channel: state.channelId,
-          ts: state.progressMessageTs,
-          text,
-        });
-      }
-      state.dirty = false;
+      await state.client.chat.update({
+        channel: state.channelId,
+        ts: state.liveMessageTs,
+        text,
+      });
     } catch (err) {
-      this.logger.error(`Failed to flush progress for ${state.parentTs}`, err);
+      this.logger.error(
+        `Failed to update live message for ${state.parentTs}`,
+        err,
+      );
     }
   }
 }

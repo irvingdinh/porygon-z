@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { AppConfig } from '../../core/config/config';
@@ -21,7 +21,7 @@ export interface WorkspaceConfig {
 }
 
 @Injectable()
-export class WorkspaceService {
+export class WorkspaceService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceService.name);
 
   private readonly workspacesDir: string;
@@ -29,6 +29,9 @@ export class WorkspaceService {
   constructor(private readonly configService: ConfigService) {
     const config = this.configService.get<AppConfig>('root')!;
     this.workspacesDir = path.join(config.dir.home, 'workspaces');
+  }
+
+  onModuleInit() {
     fs.mkdirSync(this.workspacesDir, { recursive: true });
   }
 

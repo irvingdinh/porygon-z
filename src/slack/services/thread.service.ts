@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { AppConfig } from '../../core/config/config';
@@ -16,7 +16,7 @@ export interface ThreadSession {
 // --- Service ---
 
 @Injectable()
-export class ThreadService {
+export class ThreadService implements OnModuleInit {
   private readonly logger = new Logger(ThreadService.name);
   private readonly sessionsDir: string;
   private readonly tempBase: string;
@@ -25,7 +25,9 @@ export class ThreadService {
     const config = this.configService.get<AppConfig>('root')!;
     this.sessionsDir = path.join(config.dir.home, 'sessions');
     this.tempBase = path.join(config.dir.temp, 'porygon-z', 'threads');
+  }
 
+  onModuleInit() {
     fs.mkdirSync(this.sessionsDir, { recursive: true });
     fs.mkdirSync(this.tempBase, { recursive: true });
   }

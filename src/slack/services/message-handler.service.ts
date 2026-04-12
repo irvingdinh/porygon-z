@@ -11,7 +11,6 @@ import type { ContentBlock } from './claude.service';
 import { ClaudeService } from './claude.service';
 import { ClaudeFormatterService } from './claude-formatter.service';
 import type { MessageContext } from './message-handler.types';
-import { StreamingUpdateService } from './streaming-update.service';
 import { ThreadService } from './thread.service';
 import { type WorkspaceConfig, WorkspaceService } from './workspace.service';
 
@@ -30,7 +29,6 @@ export class MessageHandlerService {
     private readonly attachment: AttachmentService,
     private readonly template: TemplateService,
     private readonly eventEmitter: EventEmitter2,
-    private readonly streamingUpdate: StreamingUpdateService,
   ) {}
 
   async processMessageSerialized(ctx: MessageContext): Promise<void> {
@@ -53,6 +51,14 @@ export class MessageHandlerService {
 
     // React hourglass
     await this.addReaction(client, channelId, msgTs, 'hourglass_flowing_sand');
+
+    // --- Create live message immediately ---
+    const liveMsg = await client.chat.postMessage({
+      channel: channelId,
+      thread_ts: parentTs,
+      text: this.formatter.formatLiveInitializing(),
+    });
+    const liveMessageTs = liveMsg.ts!;
 
     // --- Session ---
     const sessionExists = this.thread.exists(parentTs);
@@ -127,6 +133,7 @@ export class MessageHandlerService {
         isResume ? session.sessionId! : undefined,
         ctx,
         workspaceConfig,
+        liveMessageTs,
       );
 
       // Retry with fresh session if resume failed
@@ -150,40 +157,31 @@ export class MessageHandlerService {
           undefined,
           ctx,
           workspaceConfig,
+          liveMessageTs,
         );
       }
 
-      // --- Final message ---
-      const finalText =
-        this.formatter.formatFinal(result.finalResult) ||
-        this.formatter.formatStreaming(result.blocks);
+      // --- Final message — delete live message, post new ---
+      const { text: finalText, fullText } = this.formatter.formatFinal(
+        result.finalResult,
+      );
 
-      const progressTs = this.streamingUpdate.getProgressMessageTs(parentTs);
+      try {
+        await client.chat.delete({ channel: channelId, ts: liveMessageTs });
+      } catch {
+        // best-effort: live message may already be gone
+      }
 
-      if (progressTs) {
-        // Update the existing progress message with the final result
-        try {
-          await client.chat.update({
-            channel: channelId,
-            ts: progressTs,
-            text: finalText || 'No response generated.',
-          });
-        } catch {
-          // Fallback: post as new message if update fails
-          await client.chat.postMessage({
-            channel: channelId,
-            thread_ts: parentTs,
-            text: finalText || 'No response generated.',
-          });
-        }
-        this.streamingUpdate.clearProgressMessageTs(parentTs);
-      } else {
-        // No progress message was created — post the final result directly
-        await client.chat.postMessage({
-          channel: channelId,
-          thread_ts: parentTs,
-          text: finalText || 'No response generated.',
-        });
+      await client.chat.postMessage({
+        channel: channelId,
+        thread_ts: parentTs,
+        text: finalText || 'No response generated.',
+      });
+
+      // Upload full response file if truncated
+      if (fullText) {
+        const fullResponsePath = path.join(uploadDir, 'response.md');
+        fs.writeFileSync(fullResponsePath, fullText, 'utf-8');
       }
 
       // --- Upload outbound files ---
@@ -234,6 +232,7 @@ export class MessageHandlerService {
     resumeSessionId: string | undefined,
     ctx: MessageContext,
     workspaceConfig: WorkspaceConfig | null,
+    liveMessageTs: string,
   ): Promise<{
     blocks: ContentBlock[];
     finalResult: string;
@@ -242,17 +241,18 @@ export class MessageHandlerService {
   }> {
     const { channelId, userId, parentTs, client } = ctx;
 
-    // Emit init — StreamingUpdateService creates the thread state
     this.eventEmitter.emit('claude.stream.init', {
       parentTs,
       channelId,
       client,
+      liveMessageTs,
     });
 
     let blocks: ContentBlock[] = [];
     let finalResult = '';
     let sessionId: string | null = null;
     let failed = false;
+    let lastEmittedIndex = 0;
 
     try {
       for await (const event of this.claude.run({
@@ -272,18 +272,25 @@ export class MessageHandlerService {
           sessionId = event.session_id;
           this.thread.setSessionId(parentTs, sessionId);
         } else if (event.type === 'assistant' && event.message?.content) {
-          blocks = event.message.content;
+          const content = event.message.content;
+          blocks = content;
 
-          // Determine active tool name for progress display
-          const lastBlock = blocks[blocks.length - 1];
-          const activeToolName =
-            lastBlock?.type === 'tool_use' ? lastBlock.name : undefined;
+          const newBlocks = content.slice(lastEmittedIndex);
+          lastEmittedIndex = content.length;
 
-          this.eventEmitter.emit('claude.stream.blocks', {
-            parentTs,
-            blocks,
-            activeToolName,
-          });
+          for (const block of newBlocks) {
+            if (block.type === 'thinking') {
+              this.eventEmitter.emit('claude.stream.thinking', {
+                parentTs,
+                block,
+              });
+            } else if (block.type === 'tool_use') {
+              this.eventEmitter.emit('claude.stream.tool', {
+                parentTs,
+                block,
+              });
+            }
+          }
         } else if (event.type === 'result' && event.subtype === 'success') {
           finalResult = event.result ?? '';
         }
@@ -292,9 +299,7 @@ export class MessageHandlerService {
       failed = true;
     }
 
-    // Emit end — StreamingUpdateService flushes final state and cleans up
-    // Must use emitAsync to wait for handleEnd to complete (which saves progressMessageTs)
-    await this.eventEmitter.emitAsync('claude.stream.end', { parentTs });
+    this.eventEmitter.emit('claude.stream.end', { parentTs });
 
     if (resumeSessionId && !sessionId) {
       failed = true;

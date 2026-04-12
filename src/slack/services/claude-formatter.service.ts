@@ -1,73 +1,45 @@
 import { Injectable } from '@nestjs/common';
 
-import type { ContentBlock } from './claude.service';
+import type { ThinkingBlock, ToolUseBlock } from './claude.service';
 
 const MAX_MESSAGE_LENGTH = 3800;
-const MAX_BLOCKS_SHOWN = 8;
+const MAX_THINKING_LENGTH = 39000;
 
 @Injectable()
 export class ClaudeFormatterService {
-  formatStreaming(blocks: ContentBlock[], activeToolName?: string): string {
-    const recentBlocks = blocks.slice(-MAX_BLOCKS_SHOWN);
-    const skipped = blocks.length - recentBlocks.length;
-
-    const parts: string[] = [];
-
-    if (skipped > 0) {
-      parts.push(`_...${skipped} earlier steps hidden..._`);
-    }
-
-    parts.push(...recentBlocks.map((b) => this.formatBlock(b)).filter(Boolean));
-
-    if (activeToolName) {
-      parts.push(`> :hourglass: _Running \`${activeToolName}\`..._`);
-    }
-
-    const joined = parts.join('\n\n');
-    return this.truncate(joined, MAX_MESSAGE_LENGTH);
+  formatLiveInitializing(): string {
+    return ':hourglass: Initializing...';
   }
 
-  formatFinal(resultText: string): string {
-    return resultText || '';
+  formatLiveToolCall(block: ToolUseBlock, timestamp: Date): string {
+    const summary = this.summarizeToolInput(block.name, block.input);
+    const detail = summary ? `\n> ${summary}` : '';
+    const ts = this.formatTimestamp(timestamp);
+    return `> :hammer_and_wrench: *${block.name}*${detail}\n_Last updated: ${ts}_`;
+  }
+
+  formatLiveIdle(timestamp: Date): string {
+    const ts = this.formatTimestamp(timestamp);
+    return `> :hourglass: _Processing..._\n_Last updated: ${ts}_`;
+  }
+
+  formatThinkingMessage(block: ThinkingBlock): string {
+    const text = this.truncate(block.thinking.trim(), MAX_THINKING_LENGTH);
+    return `> :brain: *Thinking*\n${this.quoteLines(text)}`;
+  }
+
+  formatFinal(resultText: string): { text: string; fullText: string | null } {
+    const raw = resultText || '';
+    if (raw.length <= MAX_MESSAGE_LENGTH) {
+      return { text: raw, fullText: null };
+    }
+    const truncated =
+      this.truncate(raw, MAX_MESSAGE_LENGTH) +
+      '\n\n_Full response attached as file._';
+    return { text: truncated, fullText: raw };
   }
 
   // --- Private helpers ---
-
-  private formatBlock(block: ContentBlock): string {
-    switch (block.type) {
-      case 'thinking': {
-        const snippet = this.truncate(block.thinking.trim(), 200);
-        return `> :brain: *Thinking*\n${this.quoteLines(snippet)}`;
-      }
-
-      case 'tool_use': {
-        const summary = this.summarizeToolInput(block.name, block.input);
-        const detail = summary ? `\n> ${summary}` : '';
-        return `> :hammer_and_wrench: *${block.name}*${detail}`;
-      }
-
-      case 'tool_result': {
-        const raw =
-          typeof block.content === 'string'
-            ? block.content
-            : block.content
-                .map((c) => c.text ?? '')
-                .filter(Boolean)
-                .join('\n');
-        const snippet = this.truncate(raw.trim(), 200);
-        return `> :white_check_mark: *Tool result*\n${this.quoteLines(snippet)}`;
-      }
-
-      case 'text': {
-        const t = block.text.trim();
-        if (!t) return '';
-        return this.truncate(t, 1500);
-      }
-
-      default:
-        return '';
-    }
-  }
 
   private summarizeToolInput(
     name: string,
@@ -124,5 +96,14 @@ export class ClaudeFormatterService {
       .split('\n')
       .map((line) => `> ${line}`)
       .join('\n');
+  }
+
+  private formatTimestamp(date: Date): string {
+    return date.toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
   }
 }
