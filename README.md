@@ -14,6 +14,7 @@ SLACK_APP_TOKEN=xapp-... SLACK_BOT_TOKEN=xoxb-... npx @irvingdinh/porygon-z@late
 
 ## Deployment Guides
 
+- [Install on macOS (launchd)](docs/install-macos/install-macos.md) — run as a persistent LaunchAgent that starts on login
 - [Install on Ubuntu (systemd)](docs/install-ubuntu/install-ubuntu.md) — run as a persistent service that starts on boot
 
 ## Prerequisites

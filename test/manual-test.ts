@@ -1,4 +1,5 @@
 import * as os from 'node:os';
+
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WebClient } from '@slack/web-api';
@@ -41,10 +42,18 @@ async function main() {
   const eventEmitter = new EventEmitter2();
   const streamingUpdate = new StreamingUpdateService(formatter);
 
-  eventEmitter.on('claude.stream.init', (p: any) => streamingUpdate.handleInit(p));
-  eventEmitter.on('claude.stream.thinking', (p: any) => streamingUpdate.handleThinking(p));
-  eventEmitter.on('claude.stream.tool', (p: any) => streamingUpdate.handleTool(p));
-  eventEmitter.on('claude.stream.end', (p: any) => streamingUpdate.handleEnd(p));
+  eventEmitter.on('claude.stream.init', (p: any) =>
+    streamingUpdate.handleInit(p),
+  );
+  eventEmitter.on('claude.stream.thinking', (p: any) =>
+    streamingUpdate.handleThinking(p),
+  );
+  eventEmitter.on('claude.stream.tool', (p: any) =>
+    streamingUpdate.handleTool(p),
+  );
+  eventEmitter.on('claude.stream.end', (p: any) =>
+    streamingUpdate.handleEnd(p),
+  );
 
   const flushInterval = setInterval(() => {
     void streamingUpdate.flushAll();
