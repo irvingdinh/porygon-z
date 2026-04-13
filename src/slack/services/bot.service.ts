@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { App } from '@slack/bolt';
 
 import { AppConfig } from '../../core/config/config';
+import { CommandWorkspaceService } from './commands/command-workspace.service';
 import { RegistryService as ListenerRegistryService } from './listeners/registry.service';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class BotService
   constructor(
     private readonly configService: ConfigService,
     private readonly listenerRegistry: ListenerRegistryService,
+    private readonly commandWorkspace: CommandWorkspaceService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -32,6 +34,13 @@ export class BotService
     });
 
     this.listenerRegistry.registerAll(this.app);
+
+    this.app.action(this.commandWorkspace.actionId, (args) =>
+      this.commandWorkspace.handleAction(args as any),
+    );
+    this.app.view(this.commandWorkspace.callbackId, (args) =>
+      this.commandWorkspace.handleSubmission(args),
+    );
 
     await this.app.start();
     this.logger.log('Porygon-Z is running!');

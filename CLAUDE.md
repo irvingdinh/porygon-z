@@ -127,28 +127,27 @@ Update workspace config: set `"channelResponseMode": "all-messages"` in `$HOME/.
 **D5 — Streaming progress updates:**
 Send `@Porygon-Z (Testing) write a 200 word essay about testing`. Observe: progress message appears in thread and updates at ~2s intervals showing tool use / thinking blocks. After completion, progress message shows checkmark. Final response posted separately.
 
-**D6 — !workspace text command:**
+**D6 — !workspace command:**
 
 ```bash
 playwright-cli fill '[contenteditable]' '!workspace'
 playwright-cli press Enter
 # Wait for response
 sleep 2
-playwright-cli snapshot  # Should show current workspace config in thread
+playwright-cli snapshot  # Should show current workspace config + "Edit Settings" button in thread
 ```
 
-Verify: bot replies in thread with current config (cwd, model, effort, permission, channel response mode).
+Verify: bot replies in thread with current config and an "Edit Settings" button.
 
-To update config:
+To update config, click the "Edit Settings" button:
 
 ```bash
-playwright-cli fill '[contenteditable]' '!workspace model=haiku effort=low'
-playwright-cli press Enter
-sleep 2
-playwright-cli snapshot  # Should show confirmation with updated values
+playwright-cli click 'text=Edit Settings'
+sleep 1
+playwright-cli snapshot  # Should show workspace modal with current values pre-filled
 ```
 
-Verify: confirmation message in thread. Check `$HOME/.porygon-z-testing/workspaces/C0ARU2TNFGX.json` is updated.
+Edit values in the modal and click "Save". Verify: confirmation message in thread. Check `$HOME/.porygon-z-testing/workspaces/C0ARU2TNFGX.json` is updated.
 
 **D7 — !cd and !ll:**
 Type `!cd /tmp` then `!ll`. Verify: `!cd` shows updated directory in thread, `!ll` lists contents of `/tmp` in thread.

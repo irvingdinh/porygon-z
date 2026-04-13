@@ -2,6 +2,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 
 import { Injectable, Logger } from '@nestjs/common';
+import type {
+  AllMiddlewareArgs,
+  BlockAction,
+  SlackActionMiddlewareArgs,
+  SlackViewAction,
+  SlackViewMiddlewareArgs,
+} from '@slack/bolt';
 
 import { TemplateService } from '../../../core/services/template.service';
 import {
@@ -12,28 +19,13 @@ import {
 } from '../workspace.service';
 import { TextCommand, TextCommandContext } from './registry.service';
 
-const VALID_EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'max'];
-const VALID_PERMISSIONS: PermissionMode[] = [
-  'plan',
-  'auto',
-  'bypassPermissions',
-];
-const VALID_RESPONSES: ChannelResponseMode[] = ['mention-only', 'all-messages'];
-
-const VALID_KEYS = [
-  'cwd',
-  'model',
-  'effort',
-  'permission',
-  'response',
-  'prompt',
-];
-
 @Injectable()
 export class CommandWorkspaceService implements TextCommand {
   private readonly logger = new Logger(CommandWorkspaceService.name);
 
   readonly name = 'workspace';
+  readonly actionId = 'workspace_edit_settings';
+  readonly callbackId = 'workspace_config_modal';
 
   constructor(
     private readonly workspace: WorkspaceService,
@@ -42,16 +34,6 @@ export class CommandWorkspaceService implements TextCommand {
 
   async handle(ctx: TextCommandContext) {
     const channelId = ctx.channelId;
-
-    if (!ctx.text) {
-      await this.showConfig(ctx, channelId);
-      return;
-    }
-
-    await this.updateConfig(ctx, channelId);
-  }
-
-  private async showConfig(ctx: TextCommandContext, channelId: string) {
     const config = this.workspace.get(channelId);
 
     const cwd = config?.cwd ?? os.homedir();
@@ -61,138 +43,315 @@ export class CommandWorkspaceService implements TextCommand {
     const channelResponseMode = config?.channelResponseMode ?? 'mention-only';
     const systemPrompt = config?.systemPrompt ?? '';
 
+    const text = this.template.render('slack.commands.command-workspace-show', {
+      cwd,
+      model,
+      effort,
+      permissionLabel: this.permissionLabel(permissionMode),
+      channelResponseLabel: this.channelResponseLabel(channelResponseMode),
+      hasSystemPrompt: systemPrompt.length > 0,
+    });
+
     await ctx.client.chat.postMessage({
       channel: ctx.channelId,
       thread_ts: ctx.threadTs,
-      text: this.template.render('slack.commands.command-workspace-show', {
-        cwd,
-        model,
-        effort,
-        permissionLabel: this.permissionLabel(permissionMode),
-        channelResponseLabel: this.channelResponseLabel(channelResponseMode),
-        hasSystemPrompt: systemPrompt.length > 0,
-      }),
+      text,
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: this.actionId,
+              text: { type: 'plain_text', text: 'Edit Settings' },
+              value: JSON.stringify({
+                channelId,
+                threadTs: ctx.threadTs,
+              }),
+              style: 'primary',
+            },
+          ],
+        },
+      ],
     });
   }
 
-  private async updateConfig(ctx: TextCommandContext, channelId: string) {
-    const parsed = this.parseKeyValues(ctx.text);
+  async handleAction({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
 
-    if (parsed.error) {
-      await ctx.client.chat.postMessage({
-        channel: ctx.channelId,
-        thread_ts: ctx.threadTs,
-        text: `:x: ${parsed.error}`,
-      });
-      return;
-    }
+    const action = body.actions[0];
+    const { channelId, threadTs } = JSON.parse(
+      'value' in action ? (action.value ?? '{}') : '{}',
+    ) as {
+      channelId: string;
+      threadTs?: string;
+    };
 
-    const updates = parsed.entries!;
-
-    // Validate all entries before applying
     const config = this.workspace.get(channelId);
+
     const currentCwd = config?.cwd ?? os.homedir();
+    const currentSystemPrompt = config?.systemPrompt ?? '';
     const currentModel = config?.model ?? 'opus[1m]';
     const currentEffort = config?.effort ?? 'max';
     const currentPermissionMode = config?.permissionMode ?? 'bypassPermissions';
     const currentChannelResponseMode =
       config?.channelResponseMode ?? 'mention-only';
-    const currentSystemPrompt = config?.systemPrompt ?? '';
 
-    let cwd = currentCwd;
-    let model = currentModel;
-    let effort: EffortLevel = currentEffort;
-    let permissionMode: PermissionMode = currentPermissionMode;
-    let channelResponseMode: ChannelResponseMode = currentChannelResponseMode;
-    let systemPrompt = currentSystemPrompt;
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: {
+        type: 'modal',
+        callback_id: this.callbackId,
+        private_metadata: JSON.stringify({ channelId, threadTs }),
+        title: {
+          type: 'plain_text',
+          text: 'Workspace',
+        },
+        submit: {
+          type: 'plain_text',
+          text: 'Save',
+        },
+        close: {
+          type: 'plain_text',
+          text: 'Cancel',
+        },
+        blocks: [
+          {
+            type: 'input',
+            block_id: 'cwd_block',
+            label: {
+              type: 'plain_text',
+              text: 'Working Directory',
+            },
+            element: {
+              type: 'plain_text_input',
+              action_id: 'cwd_input',
+              initial_value: currentCwd,
+              placeholder: {
+                type: 'plain_text',
+                text: '/absolute/path/to/directory',
+              },
+            },
+          },
+          {
+            type: 'input',
+            block_id: 'model_block',
+            label: {
+              type: 'plain_text',
+              text: 'Model',
+            },
+            element: {
+              type: 'plain_text_input',
+              action_id: 'model_input',
+              initial_value: currentModel,
+              placeholder: {
+                type: 'plain_text',
+                text: 'e.g. opus[1m]',
+              },
+            },
+            hint: {
+              type: 'plain_text',
+              text: 'haiku, sonnet, sonnet[1m], opus, opus[1m], mythos',
+            },
+          },
+          {
+            type: 'input',
+            block_id: 'effort_block',
+            label: {
+              type: 'plain_text',
+              text: 'Effort',
+            },
+            element: {
+              type: 'static_select',
+              action_id: 'effort_input',
+              initial_option: {
+                text: { type: 'plain_text', text: currentEffort },
+                value: currentEffort,
+              },
+              options: [
+                { text: { type: 'plain_text', text: 'max' }, value: 'max' },
+                { text: { type: 'plain_text', text: 'high' }, value: 'high' },
+                {
+                  text: { type: 'plain_text', text: 'medium' },
+                  value: 'medium',
+                },
+                { text: { type: 'plain_text', text: 'low' }, value: 'low' },
+              ],
+            },
+          },
+          {
+            type: 'input',
+            block_id: 'permission_block',
+            label: {
+              type: 'plain_text',
+              text: 'Permission Mode',
+            },
+            element: {
+              type: 'static_select',
+              action_id: 'permission_input',
+              initial_option: {
+                text: {
+                  type: 'plain_text',
+                  text: this.permissionLabel(currentPermissionMode),
+                },
+                value: currentPermissionMode,
+              },
+              options: [
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'Bypass Permissions',
+                  },
+                  value: 'bypassPermissions',
+                },
+                {
+                  text: { type: 'plain_text', text: 'Auto' },
+                  value: 'auto',
+                },
+                {
+                  text: { type: 'plain_text', text: 'Plan (read-only)' },
+                  value: 'plan',
+                },
+              ],
+            },
+          },
+          {
+            type: 'input',
+            block_id: 'channel_response_block',
+            label: {
+              type: 'plain_text',
+              text: 'Channel Response Mode',
+            },
+            element: {
+              type: 'static_select',
+              action_id: 'channel_response_input',
+              initial_option: {
+                text: {
+                  type: 'plain_text',
+                  text: this.channelResponseLabel(currentChannelResponseMode),
+                },
+                value: currentChannelResponseMode,
+              },
+              options: [
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'Mentions Only',
+                  },
+                  value: 'mention-only',
+                },
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'All Messages',
+                  },
+                  value: 'all-messages',
+                },
+              ],
+            },
+            hint: {
+              type: 'plain_text',
+              text: 'In channels: respond to @mentions only, or all messages',
+            },
+          },
+          {
+            type: 'input',
+            block_id: 'system_prompt_block',
+            optional: true,
+            label: {
+              type: 'plain_text',
+              text: 'Workspace Instruction',
+            },
+            element: {
+              type: 'plain_text_input',
+              action_id: 'system_prompt_input',
+              multiline: true,
+              initial_value: currentSystemPrompt,
+              placeholder: {
+                type: 'plain_text',
+                text: 'Optional instructions for Claude in this workspace...',
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  async handleSubmission({
+    ack,
+    view,
+    client,
+  }: SlackViewMiddlewareArgs<SlackViewAction> & AllMiddlewareArgs) {
+    const { channelId, threadTs } = JSON.parse(view.private_metadata) as {
+      channelId: string;
+      threadTs?: string;
+    };
+
+    const values = view.state.values;
+    const cwd = values.cwd_block.cwd_input.value?.trim() ?? '';
+    const model = values.model_block.model_input.value?.trim() ?? 'opus[1m]';
+    const effort =
+      (values.effort_block.effort_input.selected_option
+        ?.value as EffortLevel) ?? 'max';
+    const permissionMode =
+      (values.permission_block.permission_input.selected_option
+        ?.value as PermissionMode) ?? 'bypassPermissions';
+    const channelResponseMode =
+      (values.channel_response_block.channel_response_input.selected_option
+        ?.value as ChannelResponseMode) ?? 'mention-only';
+    const systemPrompt =
+      values.system_prompt_block.system_prompt_input.value?.trim() ?? '';
+
+    if (!cwd.startsWith('/')) {
+      await ack({
+        response_action: 'errors',
+        errors: {
+          cwd_block:
+            'Working directory must be an absolute path (starts with /).',
+        },
+      });
+      return;
+    }
+
     let dirCreated = false;
-
-    for (const [key, value] of updates) {
-      switch (key) {
-        case 'cwd':
-          if (!value.startsWith('/')) {
-            await ctx.client.chat.postMessage({
-              channel: ctx.channelId,
-              thread_ts: ctx.threadTs,
-              text: ':x: Working directory must be an absolute path (starts with `/`).',
-            });
-            return;
-          }
-          if (!fs.existsSync(value)) {
-            try {
-              fs.mkdirSync(value, { recursive: true });
-              dirCreated = true;
-            } catch (err) {
-              const errorMsg =
-                err instanceof Error ? err.message : 'Unknown error';
-              await ctx.client.chat.postMessage({
-                channel: ctx.channelId,
-                thread_ts: ctx.threadTs,
-                text: `:x: Failed to create directory: ${errorMsg}`,
-              });
-              return;
-            }
-          } else {
-            const stat = fs.statSync(value);
-            if (!stat.isDirectory()) {
-              await ctx.client.chat.postMessage({
-                channel: ctx.channelId,
-                thread_ts: ctx.threadTs,
-                text: ':x: Path exists but is not a directory.',
-              });
-              return;
-            }
-          }
-          cwd = value;
-          break;
-
-        case 'model':
-          model = value;
-          break;
-
-        case 'effort':
-          if (!VALID_EFFORTS.includes(value as EffortLevel)) {
-            await ctx.client.chat.postMessage({
-              channel: ctx.channelId,
-              thread_ts: ctx.threadTs,
-              text: `:x: Invalid effort \`${value}\`. Valid values: ${VALID_EFFORTS.map((e) => `\`${e}\``).join(', ')}`,
-            });
-            return;
-          }
-          effort = value as EffortLevel;
-          break;
-
-        case 'permission':
-          if (!VALID_PERMISSIONS.includes(value as PermissionMode)) {
-            await ctx.client.chat.postMessage({
-              channel: ctx.channelId,
-              thread_ts: ctx.threadTs,
-              text: `:x: Invalid permission \`${value}\`. Valid values: ${VALID_PERMISSIONS.map((p) => `\`${p}\``).join(', ')}`,
-            });
-            return;
-          }
-          permissionMode = value as PermissionMode;
-          break;
-
-        case 'response':
-          if (!VALID_RESPONSES.includes(value as ChannelResponseMode)) {
-            await ctx.client.chat.postMessage({
-              channel: ctx.channelId,
-              thread_ts: ctx.threadTs,
-              text: `:x: Invalid response mode \`${value}\`. Valid values: ${VALID_RESPONSES.map((r) => `\`${r}\``).join(', ')}`,
-            });
-            return;
-          }
-          channelResponseMode = value as ChannelResponseMode;
-          break;
-
-        case 'prompt':
-          systemPrompt = value;
-          break;
+    if (!fs.existsSync(cwd)) {
+      try {
+        fs.mkdirSync(cwd, { recursive: true });
+        dirCreated = true;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        await ack({
+          response_action: 'errors',
+          errors: {
+            cwd_block: `Failed to create directory: ${errorMsg}`,
+          },
+        });
+        return;
+      }
+    } else {
+      const stat = fs.statSync(cwd);
+      if (!stat.isDirectory()) {
+        await ack({
+          response_action: 'errors',
+          errors: {
+            cwd_block: 'Path exists but is not a directory.',
+          },
+        });
+        return;
       }
     }
 
-    // Apply the update
+    await ack();
+
     this.workspace.set(channelId, {
       cwd,
       model,
@@ -210,9 +369,9 @@ export class CommandWorkspaceService implements TextCommand {
       ? 'slack.commands.command-workspace-ok-created'
       : 'slack.commands.command-workspace-ok';
 
-    await ctx.client.chat.postMessage({
-      channel: ctx.channelId,
-      thread_ts: ctx.threadTs,
+    await client.chat.postMessage({
+      channel: channelId,
+      thread_ts: threadTs,
       text: this.template.render(templateName, {
         cwd,
         model,
@@ -222,56 +381,6 @@ export class CommandWorkspaceService implements TextCommand {
         hasSystemPrompt: systemPrompt.length > 0,
       }),
     });
-  }
-
-  private parseKeyValues(
-    text: string,
-  ):
-    | { entries: [string, string][]; error?: undefined }
-    | { entries?: undefined; error: string } {
-    const entries: [string, string][] = [];
-    const regex = /(\w+)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g;
-    let match: RegExpExecArray | null;
-
-    // Check for content that doesn't match key=value pattern
-    const stripped = text.replace(regex, '').trim();
-    if (stripped.length > 0) {
-      return {
-        error: `Invalid format. Use \`key=value\` pairs.\nValid keys: ${VALID_KEYS.map((k) => `\`${k}\``).join(', ')}`,
-      };
-    }
-
-    // Reset regex state after replace
-    regex.lastIndex = 0;
-
-    while ((match = regex.exec(text)) !== null) {
-      const key = match[1];
-      let value = match[2];
-
-      // Strip surrounding quotes
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\'/g, "'");
-      }
-
-      if (!VALID_KEYS.includes(key)) {
-        return {
-          error: `Unknown key \`${key}\`. Valid keys: ${VALID_KEYS.map((k) => `\`${k}\``).join(', ')}`,
-        };
-      }
-
-      entries.push([key, value]);
-    }
-
-    if (entries.length === 0) {
-      return {
-        error: `Invalid format. Use \`key=value\` pairs.\nValid keys: ${VALID_KEYS.map((k) => `\`${k}\``).join(', ')}`,
-      };
-    }
-
-    return { entries };
   }
 
   private permissionLabel(mode: PermissionMode): string {

@@ -45,7 +45,7 @@ Type these as regular messages in any channel or DM:
 
 | Command | Description |
 |---|---|
-| `!workspace` | Configure workspace settings (directory, model, effort, permissions, channel response mode) |
+| `!workspace` | View and configure workspace settings |
 | `!cd <path>` | Change the working directory for the current channel |
 | `!ll` | List files in the current working directory |
 | `!kill` | Kill running Claude processes in this channel |
@@ -63,14 +63,12 @@ Type these as regular messages in any channel or DM:
 
 ### Workspace Configuration
 
-Use the `!workspace` command to configure per-channel settings:
+Use the `!workspace` command to view current settings and open an interactive editor:
 
 - **Working directory** — where Claude executes commands
 - **Model** — Claude model to use (e.g., `sonnet`, `opus`)
 - **Effort level** — Claude's effort level (`low`, `medium`, `high`, `max`)
 - **Permission mode** — controls Claude's autonomy (`plan`, `auto`, `bypassPermissions`)
-
-Example: `!workspace model=sonnet effort=high cwd=/path/to/project`
 
 ## Development
 
