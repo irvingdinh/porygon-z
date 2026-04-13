@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 
+import { CommandRouterService } from '../commands/registry.service';
 import { MessageHandlerService } from '../message-handler.service';
 import { WorkspaceService } from '../workspace.service';
 import { SlackListener } from './registry.service';
@@ -12,6 +13,7 @@ export class ListenerMessageService implements SlackListener<'message'> {
   readonly event = 'message' as const;
 
   constructor(
+    private readonly commandRouter: CommandRouterService,
     private readonly messageHandler: MessageHandlerService,
     private readonly workspace: WorkspaceService,
   ) {}
@@ -23,6 +25,20 @@ export class ListenerMessageService implements SlackListener<'message'> {
 
     const msg = message as any;
     if (msg.user === context.botUserId) return;
+
+    // Check for ! text commands before channelResponseMode filter
+    const messageText = (msg.text ?? '').trim();
+    if (messageText.startsWith('!')) {
+      const threadTs = msg.thread_ts ?? msg.ts;
+      const handled = await this.commandRouter.tryHandle(
+        messageText,
+        msg.channel,
+        msg.user,
+        args.client,
+        threadTs,
+      );
+      if (handled) return;
+    }
 
     // In channels (non-DM), only respond if channelResponseMode is 'all-messages'
     const channelType = msg.channel_type as string | undefined;

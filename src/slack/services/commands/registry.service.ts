@@ -1,30 +1,66 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type {
-  AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
-} from '@slack/bolt';
-import { App } from '@slack/bolt';
+import type { WebClient } from '@slack/web-api';
 
-export const SLACK_COMMAND = Symbol('SLACK_COMMAND');
+import { TemplateService } from '../../../core/services/template.service';
 
-export interface SlackCommand {
-  command: string;
-  handle(args: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void>;
+export const TEXT_COMMAND = Symbol('TEXT_COMMAND');
+
+export interface TextCommandContext {
+  channelId: string;
+  userId: string;
+  text: string;
+  client: WebClient;
+  threadTs: string;
+}
+
+export interface TextCommand {
+  name: string;
+  handle(ctx: TextCommandContext): Promise<void>;
 }
 
 @Injectable()
-export class RegistryService {
-  private readonly logger = new Logger(RegistryService.name);
+export class CommandRouterService {
+  private readonly logger = new Logger(CommandRouterService.name);
+  private readonly commandMap: Map<string, TextCommand>;
 
   constructor(
-    @Inject(SLACK_COMMAND)
-    private readonly commands: SlackCommand[],
-  ) {}
+    @Inject(TEXT_COMMAND)
+    private readonly commands: TextCommand[],
+    private readonly template: TemplateService,
+  ) {
+    this.commandMap = new Map(commands.map((cmd) => [cmd.name, cmd]));
+  }
 
-  registerAll(app: App) {
-    for (const cmd of this.commands) {
-      app.command(cmd.command, (args) => cmd.handle(args));
-      this.logger.log(`Registered command: ${cmd.command}`);
+  async tryHandle(
+    text: string,
+    channelId: string,
+    userId: string,
+    client: WebClient,
+    threadTs: string,
+  ): Promise<boolean> {
+    const match = text.match(/^!(\S+)(?:\s+(.*))?$/s);
+    if (!match) return false;
+
+    const commandName = match[1];
+    const args = (match[2] ?? '').trim();
+
+    const command = this.commandMap.get(commandName);
+    if (command) {
+      this.logger.log(
+        `Dispatching command: !${commandName} (channel=${channelId}, user=${userId})`,
+      );
+      await command.handle({ channelId, userId, text: args, client, threadTs });
+      return true;
     }
+
+    // Unknown command — reply with error + full help content
+    const helpText = this.template.render('slack.commands.command-help-ok');
+    await client.chat.postMessage({
+      channel: channelId,
+      thread_ts: threadTs,
+      text: `:x: Unknown command \`!${commandName}\`\n\n${helpText}`,
+    });
+
+    return true;
   }
 }

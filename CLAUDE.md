@@ -57,7 +57,7 @@ EOF
 mkdir -p /tmp/porygon-z-test-cwd
 ```
 
-Use haiku + direct JSON for general tests. Use any model or the `/workspace` Playwright modal when testing that specific flow.
+Use haiku + direct JSON for general tests. Use any model or `!workspace` to configure the workspace when testing that specific flow.
 
 **5. Open Playwright browser** (persisted profile is logged into Slack):
 
@@ -73,7 +73,7 @@ Verify: `playwright-cli snapshot` should show `porygon-z-playground` channel.
 
 | Tier | Timeout | Poll interval | Use for |
 |------|---------|---------------|---------|
-| Fast | 5s | 1s | Slash command responses, reactions |
+| Fast | 5s | 1s | Text command responses, reactions |
 | Medium | 30s | 3s | Simple Claude responses (haiku, short prompts) |
 | Long | 120s | 5s | Complex responses (opus, multi-tool runs) |
 
@@ -95,8 +95,8 @@ Always run **Smoke Tests** after any change. Run **Deep Tests** when touching th
 | # | Test | Steps | Verify |
 |---|------|-------|--------|
 | S1 | @mention response | Type `@Porygon-Z (Testing) hello` in channel | Reaction chain: hourglass -> arrows -> removed. Bot replies in thread. |
-| S2 | /help command | Type `/help` | Ephemeral message listing all 7 commands |
-| S3 | /sessions | Type `/sessions` | Lists session from S1 or "No active sessions" |
+| S2 | !help command | Type `!help` in channel | Bot replies in thread listing all 7 commands |
+| S3 | !sessions | Type `!sessions` in channel | Bot replies in thread with session list from S1 or "No active sessions" |
 
 #### Deep Tests — Code Area Mapping
 
@@ -127,27 +127,37 @@ Update workspace config: set `"channelResponseMode": "all-messages"` in `$HOME/.
 **D5 — Streaming progress updates:**
 Send `@Porygon-Z (Testing) write a 200 word essay about testing`. Observe: progress message appears in thread and updates at ~2s intervals showing tool use / thinking blocks. After completion, progress message shows checkmark. Final response posted separately.
 
-**D6 — /workspace modal:**
+**D6 — !workspace text command:**
 
 ```bash
-playwright-cli fill '[contenteditable]' '/workspace'
+playwright-cli fill '[contenteditable]' '!workspace'
 playwright-cli press Enter
-# Wait for modal
+# Wait for response
 sleep 2
-playwright-cli snapshot  # Should show modal with cwd, model, effort, permission, channel response mode fields
-# Interact with modal fields and submit
+playwright-cli snapshot  # Should show current workspace config in thread
 ```
 
-Verify: confirmation message in channel. Check `$HOME/.porygon-z-testing/workspaces/C0ARU2TNFGX.json` is updated.
+Verify: bot replies in thread with current config (cwd, model, effort, permission, channel response mode).
 
-**D7 — /cd and /ll:**
-Type `/cd /tmp` then `/ll`. Verify: `/cd` shows updated directory, `/ll` lists contents of `/tmp`.
+To update config:
 
-**D8 — /kill:**
-Start a long-running request (`@Porygon-Z (Testing) write a very long essay...`). While arrows reaction is active, type `/kill`. Verify: ephemeral message reports killed process count.
+```bash
+playwright-cli fill '[contenteditable]' '!workspace model=haiku effort=low'
+playwright-cli press Enter
+sleep 2
+playwright-cli snapshot  # Should show confirmation with updated values
+```
 
-**D9 — /kill-all:**
-Same as D8 but use `/kill-all`. Verify: reports total killed count globally.
+Verify: confirmation message in thread. Check `$HOME/.porygon-z-testing/workspaces/C0ARU2TNFGX.json` is updated.
+
+**D7 — !cd and !ll:**
+Type `!cd /tmp` then `!ll`. Verify: `!cd` shows updated directory in thread, `!ll` lists contents of `/tmp` in thread.
+
+**D8 — !kill:**
+Start a long-running request (`@Porygon-Z (Testing) write a very long essay...`). While arrows reaction is active, type `!kill`. Verify: bot replies in thread with killed process count.
+
+**D9 — !kill-all:**
+Same as D8 but use `!kill-all`. Verify: bot replies in thread with total killed count globally.
 
 **D10 — Session corruption recovery:**
 Corrupt a session file: `echo "INVALID" > $HOME/.porygon-z-testing/sessions/<threadTs>.json`. Send a message in that thread. Verify: bot posts session corrupted/expired warning, creates new session, responds normally.

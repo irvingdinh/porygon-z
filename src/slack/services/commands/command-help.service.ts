@@ -1,21 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type {
-  AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
-} from '@slack/bolt';
 
 import { TemplateService } from '../../../core/services/template.service';
-import { SlackCommand } from './registry.service';
+import { TextCommand, TextCommandContext } from './registry.service';
 
 @Injectable()
-export class CommandHelpService implements SlackCommand {
+export class CommandHelpService implements TextCommand {
   private readonly logger = new Logger(CommandHelpService.name);
 
-  readonly command = '/help';
+  readonly name = 'help';
 
   constructor(private readonly template: TemplateService) {}
 
-  async handle({ ack }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    await ack(this.template.render('slack.commands.command-help-ok'));
+  async handle(ctx: TextCommandContext) {
+    await ctx.client.chat.postMessage({
+      channel: ctx.channelId,
+      thread_ts: ctx.threadTs,
+      text: this.template.render('slack.commands.command-help-ok'),
+    });
   }
 }

@@ -3,21 +3,17 @@ import * as path from 'node:path';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type {
-  AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
-} from '@slack/bolt';
 
 import { AppConfig } from '../../../core/config/config';
 import { TemplateService } from '../../../core/services/template.service';
 import type { ThreadSession } from '../thread.service';
-import { SlackCommand } from './registry.service';
+import { TextCommand, TextCommandContext } from './registry.service';
 
 @Injectable()
-export class CommandSessionsService implements SlackCommand {
+export class CommandSessionsService implements TextCommand {
   private readonly logger = new Logger(CommandSessionsService.name);
 
-  readonly command = '/sessions';
+  readonly name = 'sessions';
 
   private readonly sessionsDir: string;
 
@@ -29,15 +25,17 @@ export class CommandSessionsService implements SlackCommand {
     this.sessionsDir = path.join(config.dir.home, 'sessions');
   }
 
-  async handle({ ack }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  async handle(ctx: TextCommandContext) {
     const sessions = this.listSessions();
-    await ack(
-      this.template.render('slack.commands.command-sessions-ok', {
+    await ctx.client.chat.postMessage({
+      channel: ctx.channelId,
+      thread_ts: ctx.threadTs,
+      text: this.template.render('slack.commands.command-sessions-ok', {
         sessions,
         count: sessions.length,
         empty: sessions.length === 0,
       }),
-    );
+    });
   }
 
   private listSessions(): Array<{

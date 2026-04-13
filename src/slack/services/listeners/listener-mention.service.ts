@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 
+import { CommandRouterService } from '../commands/registry.service';
 import { MessageHandlerService } from '../message-handler.service';
 import { SlackListener } from './registry.service';
 
@@ -10,7 +11,10 @@ export class ListenerMentionService implements SlackListener<'app_mention'> {
 
   readonly event = 'app_mention' as const;
 
-  constructor(private readonly messageHandler: MessageHandlerService) {}
+  constructor(
+    private readonly commandRouter: CommandRouterService,
+    private readonly messageHandler: MessageHandlerService,
+  ) {}
 
   async handle(
     args: SlackEventMiddlewareArgs<'app_mention'> & AllMiddlewareArgs,
@@ -24,6 +28,19 @@ export class ListenerMentionService implements SlackListener<'app_mention'> {
     const text = (event.text ?? '')
       .replace(new RegExp(`<@${context.botUserId}>`, 'g'), '')
       .trim();
+
+    // Check for ! text commands
+    if (text.startsWith('!')) {
+      const threadTs = event.thread_ts ?? event.ts;
+      const handled = await this.commandRouter.tryHandle(
+        text,
+        event.channel,
+        event.user,
+        client,
+        threadTs,
+      );
+      if (handled) return;
+    }
 
     const parentTs = event.thread_ts ?? event.ts;
 

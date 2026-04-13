@@ -5,7 +5,7 @@ import { CommandKillAllService } from './command-kill-all.service';
 import { CommandLlService } from './command-ll.service';
 import { CommandSessionsService } from './command-sessions.service';
 import { CommandWorkspaceService } from './command-workspace.service';
-import { RegistryService, SLACK_COMMAND } from './registry.service';
+import { CommandRouterService, TEXT_COMMAND } from './registry.service';
 
 const commandClasses = [
   CommandKillService,
@@ -18,10 +18,10 @@ const commandClasses = [
 ];
 
 export const commandServices = [
-  RegistryService,
+  CommandRouterService,
   ...commandClasses,
   {
-    provide: SLACK_COMMAND,
+    provide: TEXT_COMMAND,
     useFactory: (
       ...commands: InstanceType<(typeof commandClasses)[number]>[]
     ) => commands,

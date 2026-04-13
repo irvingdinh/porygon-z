@@ -134,7 +134,7 @@ Slack provides the interface, authentication, and delivery mechanism:
 - **Channels** map to workspaces — one channel, one project configuration
 - **Reactions** signal execution state — visible in phone notifications without opening the app
 - **File sharing** enables seamless I/O — attach files for Claude to process, receive generated files back
-- **Slash commands** provide instant operational control — `/kill`, `/cd`, `/workspace`, `/sessions`
+- **Text commands** provide instant operational control — `!kill`, `!cd`, `!workspace`, `!sessions`
 
 ### Real-Time Streaming
 

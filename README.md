@@ -39,14 +39,19 @@ You can set these inline, export them, or use a `.env` file in your working dire
 
 Once running, send a direct message to the Porygon-Z bot in Slack. It will spawn a Claude Code session to handle your request and stream the response back to your thread.
 
-### Slash Commands
+### Commands
+
+Type these as regular messages in any channel or DM:
 
 | Command | Description |
 |---|---|
-| `/workspace` | Configure the workspace for the current channel — set working directory, Claude model, effort level, and permission mode |
-| `/cd <path>` | Change the working directory for the current channel |
-| `/ll` | List files in the current working directory |
-| `/kill` | Kill all running Claude processes |
+| `!workspace` | Configure workspace settings (directory, model, effort, permissions, channel response mode) |
+| `!cd <path>` | Change the working directory for the current channel |
+| `!ll` | List files in the current working directory |
+| `!kill` | Kill running Claude processes in this channel |
+| `!kill-all` | Kill all running Claude processes globally |
+| `!sessions` | List active Claude sessions |
+| `!help` | Show all available commands |
 
 ### Features
 
@@ -58,12 +63,14 @@ Once running, send a direct message to the Porygon-Z bot in Slack. It will spawn
 
 ### Workspace Configuration
 
-Use the `/workspace` command to configure per-channel settings:
+Use the `!workspace` command to configure per-channel settings:
 
 - **Working directory** — where Claude executes commands
 - **Model** — Claude model to use (e.g., `sonnet`, `opus`)
 - **Effort level** — Claude's effort level (`low`, `medium`, `high`, `max`)
 - **Permission mode** — controls Claude's autonomy (`plan`, `auto`, `bypassPermissions`)
+
+Example: `!workspace model=sonnet effort=high cwd=/path/to/project`
 
 ## Development
 
@@ -138,27 +145,13 @@ Follow these steps to create and configure a Slack app for Porygon-Z.
 3. Under **Subscribe to bot events**, add:
    - `message.im` — listens for direct messages to the bot
 
-### 5. Register Slash Commands
-
-1. Go to **Slash Commands** in the left sidebar
-2. Create the following commands:
-
-| Command | Short Description |
-|---|---|
-| `/workspace` | Configure workspace settings |
-| `/cd` | Change working directory |
-| `/ll` | List files |
-| `/kill` | Kill running processes |
-
-For each command, set the **Request URL** to any placeholder (Socket Mode does not use it).
-
-### 6. Configure App Home
+### 5. Configure App Home
 
 1. Go to **App Home** in the left sidebar
 2. Under **Show Tabs**, enable **Messages Tab**
-3. Check **Allow users to send Slash commands and messages from the messages tab**
+3. Check **Allow users to send messages from the messages tab**
 
-### 7. Start Porygon-Z
+### 6. Start Porygon-Z
 
 ```bash
 SLACK_APP_TOKEN=xapp-... SLACK_BOT_TOKEN=xoxb-... npx @irvingdinh/porygon-z@latest

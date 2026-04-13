@@ -1,35 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type {
-  AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
-} from '@slack/bolt';
 
 import { TemplateService } from '../../../core/services/template.service';
 import { ClaudeService } from '../claude.service';
-import { SlackCommand } from './registry.service';
+import { TextCommand, TextCommandContext } from './registry.service';
 
 @Injectable()
-export class CommandKillService implements SlackCommand {
+export class CommandKillService implements TextCommand {
   private readonly logger = new Logger(CommandKillService.name);
 
-  readonly command = '/kill';
+  readonly name = 'kill';
 
   constructor(
     private readonly claude: ClaudeService,
     private readonly template: TemplateService,
   ) {}
 
-  async handle({
-    ack,
-    command,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    const channelId = command.channel_id;
+  async handle(ctx: TextCommandContext) {
+    const channelId = ctx.channelId;
     const count = this.claude.killByChannel(channelId);
-    await ack(
-      this.template.render('slack.commands.command-kill-ok', {
+    await ctx.client.chat.postMessage({
+      channel: ctx.channelId,
+      thread_ts: ctx.threadTs,
+      text: this.template.render('slack.commands.command-kill-ok', {
         count,
         plural: count !== 1,
       }),
-    );
+    });
   }
 }
