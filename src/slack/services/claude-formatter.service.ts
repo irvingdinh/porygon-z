@@ -23,6 +23,43 @@ export class ClaudeFormatterService {
     return `> :hourglass: _Processing..._\n_Last updated: ${ts}_`;
   }
 
+  formatLiveTaskProgress(
+    tasks: Array<{
+      description: string;
+      lastToolName: string;
+      lastDescription: string;
+      toolCount: number;
+      durationMs: number;
+    }>,
+    timestamp: Date,
+  ): string {
+    const ts = this.formatTimestamp(timestamp);
+    const lines: string[] = [];
+
+    if (tasks.length === 1) {
+      const task = tasks[0];
+      const elapsed = Math.round(task.durationMs / 1000);
+      lines.push(
+        `> :hammer_and_wrench: *${task.lastToolName}* — ${this.truncate(task.lastDescription, 120)}`,
+      );
+      lines.push(`> _Step ${task.toolCount} · ${elapsed}s elapsed_`);
+    } else {
+      lines.push(`> :zap: *${tasks.length} agents running*`);
+      for (const task of tasks.slice(0, 3)) {
+        const elapsed = Math.round(task.durationMs / 1000);
+        lines.push(
+          `> :small_blue_diamond: ${task.lastToolName}: ${this.truncate(task.lastDescription, 80)} _(${elapsed}s)_`,
+        );
+      }
+      if (tasks.length > 3) {
+        lines.push(`> _...and ${tasks.length - 3} more_`);
+      }
+    }
+
+    lines.push(`_Last updated: ${ts}_`);
+    return lines.join('\n');
+  }
+
   formatThinkingMessage(block: ThinkingBlock): string {
     const text = this.truncate(block.thinking.trim(), MAX_THINKING_LENGTH);
     return `> :brain: *Thinking*\n${this.quoteLines(text)}`;

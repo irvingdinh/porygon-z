@@ -40,6 +40,18 @@ export interface StreamEvent {
   type: string;
   subtype?: string;
   session_id?: string;
+  task_id?: string;
+  tool_use_id?: string;
+  description?: string;
+  status?: string;
+  summary?: string;
+  last_tool_name?: string;
+  parent_tool_use_id?: string | null;
+  usage?: {
+    total_tokens?: number;
+    tool_uses?: number;
+    duration_ms?: number;
+  };
   message?: {
     content: ContentBlock[];
   };

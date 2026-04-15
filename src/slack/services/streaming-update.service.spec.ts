@@ -205,6 +205,181 @@ describe('StreamingUpdateService', () => {
     });
   });
 
+  describe('task lifecycle', () => {
+    it('tracks active tasks and shows progress in flushAll', async () => {
+      const client = mockClient() as any;
+      service.handleInit({
+        parentTs: '1234.5678',
+        channelId: 'C_TEST',
+        client,
+        liveMessageTs: 'live.msg.ts',
+      });
+
+      service.handleTaskStarted({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Explore codebase',
+      });
+
+      service.handleTaskProgress({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Reading src/main.ts',
+        toolName: 'Read',
+        toolCount: 3,
+        durationMs: 5000,
+      });
+
+      await service.flushAll();
+
+      const callText = client.chat.update.mock.calls[0][0].text;
+      expect(callText).toContain(':hammer_and_wrench:');
+      expect(callText).toContain('Read');
+      expect(callText).toContain('Reading src/main.ts');
+      expect(callText).toContain('Step 3');
+    });
+
+    it('removes task on completion and falls back to idle', async () => {
+      const client = mockClient() as any;
+      service.handleInit({
+        parentTs: '1234.5678',
+        channelId: 'C_TEST',
+        client,
+        liveMessageTs: 'live.msg.ts',
+      });
+
+      service.handleTaskStarted({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Explore',
+      });
+
+      service.handleTaskProgress({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Reading file',
+        toolName: 'Read',
+        toolCount: 1,
+        durationMs: 1000,
+      });
+
+      service.handleTaskCompleted({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+      });
+
+      await service.flushAll();
+
+      const callText = client.chat.update.mock.calls[0][0].text;
+      expect(callText).toContain('Processing...');
+    });
+
+    it('shows multi-agent format with concurrent tasks', async () => {
+      const client = mockClient() as any;
+      service.handleInit({
+        parentTs: '1234.5678',
+        channelId: 'C_TEST',
+        client,
+        liveMessageTs: 'live.msg.ts',
+      });
+
+      service.handleTaskStarted({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Explore structure',
+      });
+      service.handleTaskProgress({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Running find...',
+        toolName: 'Bash',
+        toolCount: 1,
+        durationMs: 2000,
+      });
+
+      service.handleTaskStarted({
+        parentTs: '1234.5678',
+        taskId: 'task-2',
+        description: 'Explore tests',
+      });
+      service.handleTaskProgress({
+        parentTs: '1234.5678',
+        taskId: 'task-2',
+        description: 'Reading package.json',
+        toolName: 'Read',
+        toolCount: 1,
+        durationMs: 3000,
+      });
+
+      await service.flushAll();
+
+      const callText = client.chat.update.mock.calls[0][0].text;
+      expect(callText).toContain(':zap:');
+      expect(callText).toContain('2 agents running');
+      expect(callText).toContain('Bash');
+      expect(callText).toContain('Read');
+    });
+
+    it('task progress takes priority over direct tool block', async () => {
+      const client = mockClient() as any;
+      service.handleInit({
+        parentTs: '1234.5678',
+        channelId: 'C_TEST',
+        client,
+        liveMessageTs: 'live.msg.ts',
+      });
+
+      const toolBlock: ToolUseBlock = {
+        type: 'tool_use',
+        id: 't1',
+        name: 'Agent',
+        input: { description: 'Do something' },
+      };
+      service.handleTool({ parentTs: '1234.5678', block: toolBlock });
+
+      service.handleTaskStarted({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Explore',
+      });
+      service.handleTaskProgress({
+        parentTs: '1234.5678',
+        taskId: 'task-1',
+        description: 'Reading file',
+        toolName: 'Read',
+        toolCount: 1,
+        durationMs: 1000,
+      });
+
+      await service.flushAll();
+
+      const callText = client.chat.update.mock.calls[0][0].text;
+      expect(callText).toContain('Reading file');
+      expect(callText).not.toContain('Do something');
+    });
+
+    it('ignores task events for unknown parentTs', () => {
+      service.handleTaskStarted({
+        parentTs: 'unknown',
+        taskId: 'task-1',
+        description: 'Explore',
+      });
+      service.handleTaskProgress({
+        parentTs: 'unknown',
+        taskId: 'task-1',
+        description: 'Reading',
+        toolName: 'Read',
+        toolCount: 1,
+        durationMs: 1000,
+      });
+      service.handleTaskCompleted({
+        parentTs: 'unknown',
+        taskId: 'task-1',
+      });
+      // Should not throw
+    });
+  });
+
   describe('handleEnd', () => {
     it('cleans up state', () => {
       const client = mockClient() as any;

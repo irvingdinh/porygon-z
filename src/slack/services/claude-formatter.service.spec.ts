@@ -188,6 +188,70 @@ describe('ClaudeFormatterService', () => {
     });
   });
 
+  describe('formatLiveTaskProgress', () => {
+    const ts = new Date('2026-04-12T14:30:45Z');
+
+    it('formats single task with full detail', () => {
+      const result = service.formatLiveTaskProgress(
+        [
+          {
+            description: 'Explore project structure',
+            lastToolName: 'Read',
+            lastDescription: 'Reading src/main.ts',
+            toolCount: 5,
+            durationMs: 12000,
+          },
+        ],
+        ts,
+      );
+      expect(result).toContain(':hammer_and_wrench:');
+      expect(result).toContain('*Read*');
+      expect(result).toContain('Reading src/main.ts');
+      expect(result).toContain('Step 5');
+      expect(result).toContain('12s elapsed');
+      expect(result).toContain('Last updated:');
+    });
+
+    it('formats multiple tasks as summary', () => {
+      const result = service.formatLiveTaskProgress(
+        [
+          {
+            description: 'Task A',
+            lastToolName: 'Bash',
+            lastDescription: 'Running find...',
+            toolCount: 3,
+            durationMs: 5000,
+          },
+          {
+            description: 'Task B',
+            lastToolName: 'Read',
+            lastDescription: 'Reading package.json',
+            toolCount: 2,
+            durationMs: 3000,
+          },
+        ],
+        ts,
+      );
+      expect(result).toContain(':zap:');
+      expect(result).toContain('*2 agents running*');
+      expect(result).toContain('Bash');
+      expect(result).toContain('Read');
+    });
+
+    it('limits display to 3 tasks with overflow', () => {
+      const tasks = Array.from({ length: 5 }, (_, i) => ({
+        description: `Task ${i}`,
+        lastToolName: 'Read',
+        lastDescription: `Reading file ${i}`,
+        toolCount: i + 1,
+        durationMs: (i + 1) * 1000,
+      }));
+      const result = service.formatLiveTaskProgress(tasks, ts);
+      expect(result).toContain('*5 agents running*');
+      expect(result).toContain('...and 2 more');
+    });
+  });
+
   describe('formatFinal', () => {
     it('returns text as-is when under limit', () => {
       const result = service.formatFinal('The answer is 4');

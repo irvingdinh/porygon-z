@@ -248,11 +248,10 @@ export class MessageHandlerService {
       liveMessageTs,
     });
 
-    let blocks: ContentBlock[] = [];
+    const blocks: ContentBlock[] = [];
     let finalResult = '';
     let sessionId: string | null = null;
     let failed = false;
-    let lastEmittedIndex = 0;
 
     try {
       for await (const event of this.claude.run({
@@ -273,12 +272,10 @@ export class MessageHandlerService {
           this.thread.setSessionId(parentTs, sessionId);
         } else if (event.type === 'assistant' && event.message?.content) {
           const content = event.message.content;
-          blocks = content;
 
-          const newBlocks = content.slice(lastEmittedIndex);
-          lastEmittedIndex = content.length;
+          for (const block of content) {
+            blocks.push(block);
 
-          for (const block of newBlocks) {
             if (block.type === 'thinking') {
               this.eventEmitter.emit('claude.stream.thinking', {
                 parentTs,
@@ -291,6 +288,35 @@ export class MessageHandlerService {
               });
             }
           }
+        } else if (
+          event.type === 'system' &&
+          event.subtype === 'task_started'
+        ) {
+          this.eventEmitter.emit('claude.stream.task_started', {
+            parentTs,
+            taskId: event.task_id,
+            description: event.description,
+          });
+        } else if (
+          event.type === 'system' &&
+          event.subtype === 'task_progress'
+        ) {
+          this.eventEmitter.emit('claude.stream.task_progress', {
+            parentTs,
+            taskId: event.task_id,
+            description: event.description,
+            toolName: event.last_tool_name,
+            toolCount: event.usage?.tool_uses,
+            durationMs: event.usage?.duration_ms,
+          });
+        } else if (
+          event.type === 'system' &&
+          event.subtype === 'task_notification'
+        ) {
+          this.eventEmitter.emit('claude.stream.task_completed', {
+            parentTs,
+            taskId: event.task_id,
+          });
         } else if (event.type === 'result' && event.subtype === 'success') {
           finalResult = event.result ?? '';
         }

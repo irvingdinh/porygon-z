@@ -51,6 +51,15 @@ async function main() {
   eventEmitter.on('claude.stream.tool', (p: any) =>
     streamingUpdate.handleTool(p),
   );
+  eventEmitter.on('claude.stream.task_started', (p: any) =>
+    streamingUpdate.handleTaskStarted(p),
+  );
+  eventEmitter.on('claude.stream.task_progress', (p: any) =>
+    streamingUpdate.handleTaskProgress(p),
+  );
+  eventEmitter.on('claude.stream.task_completed', (p: any) =>
+    streamingUpdate.handleTaskCompleted(p),
+  );
   eventEmitter.on('claude.stream.end', (p: any) =>
     streamingUpdate.handleEnd(p),
   );

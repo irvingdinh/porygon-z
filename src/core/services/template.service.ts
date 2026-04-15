@@ -37,8 +37,14 @@ export class TemplateService {
       } else if (entry.name.endsWith('.handlebars')) {
         const name = entry.name.replace(/\.handlebars$/, '');
         const key = prefix ? `${prefix}.${name}` : name;
-        const source = fs.readFileSync(fullPath, 'utf-8');
-        this.templates.set(key, Handlebars.compile(source));
+        try {
+          const source = fs.readFileSync(fullPath, 'utf-8');
+          this.templates.set(key, Handlebars.compile(source));
+        } catch (err) {
+          throw new Error(
+            `Failed to load template ${fullPath}: ${(err as Error).message}`,
+          );
+        }
       }
     }
   }

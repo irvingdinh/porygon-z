@@ -50,10 +50,18 @@ export class WorkspaceService implements OnModuleInit {
     const existing = this.get(channelId) ?? ({} as WorkspaceConfig);
     const merged = { ...existing, ...partial };
 
-    fs.writeFileSync(
-      this.configPath(channelId),
-      JSON.stringify(merged, null, 2),
-    );
+    try {
+      fs.writeFileSync(
+        this.configPath(channelId),
+        JSON.stringify(merged, null, 2),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to write workspace config for ${channelId}`,
+        err,
+      );
+      throw err;
+    }
   }
 
   resolveCwd(channelId: string): string {

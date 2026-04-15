@@ -5,7 +5,7 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { App } from '@slack/bolt';
+import { App, SocketModeReceiver } from '@slack/bolt';
 
 import { AppConfig } from '../../core/config/config';
 import { CommandWorkspaceService } from './commands/command-workspace.service';
@@ -27,10 +27,30 @@ export class BotService
   async onApplicationBootstrap() {
     const config = this.configService.get<AppConfig>('root')!;
 
+    const receiver = new SocketModeReceiver({
+      appToken: config.slack.appToken,
+      clientPingTimeout: 30_000,
+      serverPingTimeout: 60_000,
+    });
+
+    receiver.client.on('connected', () =>
+      this.logger.log('Slack WebSocket connected'),
+    );
+    receiver.client.on('disconnected', () =>
+      this.logger.warn('Slack WebSocket disconnected'),
+    );
+    receiver.client.on('reconnecting', () =>
+      this.logger.warn('Slack WebSocket reconnecting...'),
+    );
+
     this.app = new App({
       token: config.slack.botToken,
-      appToken: config.slack.appToken,
-      socketMode: true,
+      receiver,
+    });
+
+    this.app.error((error) => {
+      this.logger.error('Slack app error', error);
+      return Promise.resolve();
     });
 
     this.listenerRegistry.registerAll(this.app);

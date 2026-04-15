@@ -8,12 +8,21 @@ import { ClaudeFormatterService } from './claude-formatter.service';
 
 // --- Internal state ---
 
+interface TaskProgress {
+  description: string;
+  lastToolName: string;
+  lastDescription: string;
+  toolCount: number;
+  durationMs: number;
+}
+
 interface ThreadStreamState {
   channelId: string;
   parentTs: string;
   client: WebClient;
   liveMessageTs: string;
   currentToolBlock: ToolUseBlock | null;
+  activeTasks: Map<string, TaskProgress>;
   finalized: boolean;
 }
 
@@ -41,6 +50,7 @@ export class StreamingUpdateService implements OnApplicationShutdown {
       client: payload.client,
       liveMessageTs: payload.liveMessageTs,
       currentToolBlock: null,
+      activeTasks: new Map(),
       finalized: false,
     });
   }
@@ -71,6 +81,50 @@ export class StreamingUpdateService implements OnApplicationShutdown {
     const state = this.streams.get(payload.parentTs);
     if (!state) return;
     state.currentToolBlock = payload.block;
+  }
+
+  @OnEvent('claude.stream.task_started')
+  handleTaskStarted(payload: {
+    parentTs: string;
+    taskId: string;
+    description: string;
+  }) {
+    const state = this.streams.get(payload.parentTs);
+    if (!state) return;
+    state.activeTasks.set(payload.taskId, {
+      description: payload.description,
+      lastToolName: '',
+      lastDescription: payload.description,
+      toolCount: 0,
+      durationMs: 0,
+    });
+  }
+
+  @OnEvent('claude.stream.task_progress')
+  handleTaskProgress(payload: {
+    parentTs: string;
+    taskId: string;
+    description: string;
+    toolName: string;
+    toolCount: number;
+    durationMs: number;
+  }) {
+    const state = this.streams.get(payload.parentTs);
+    if (!state) return;
+    const task = state.activeTasks.get(payload.taskId);
+    if (task) {
+      task.lastToolName = payload.toolName;
+      task.lastDescription = payload.description;
+      task.toolCount = payload.toolCount;
+      task.durationMs = payload.durationMs;
+    }
+  }
+
+  @OnEvent('claude.stream.task_completed')
+  handleTaskCompleted(payload: { parentTs: string; taskId: string }) {
+    const state = this.streams.get(payload.parentTs);
+    if (!state) return;
+    state.activeTasks.delete(payload.taskId);
   }
 
   @OnEvent('claude.stream.end')
@@ -107,9 +161,19 @@ export class StreamingUpdateService implements OnApplicationShutdown {
 
   private async flushOne(state: ThreadStreamState) {
     const now = new Date();
-    const text = state.currentToolBlock
-      ? this.formatter.formatLiveToolCall(state.currentToolBlock, now)
-      : this.formatter.formatLiveIdle(now);
+    let text: string;
+
+    const activeTasks = [...state.activeTasks.values()].filter(
+      (t) => t.lastToolName,
+    );
+
+    if (activeTasks.length > 0) {
+      text = this.formatter.formatLiveTaskProgress(activeTasks, now);
+    } else if (state.currentToolBlock) {
+      text = this.formatter.formatLiveToolCall(state.currentToolBlock, now);
+    } else {
+      text = this.formatter.formatLiveIdle(now);
+    }
 
     try {
       await state.client.chat.update({
